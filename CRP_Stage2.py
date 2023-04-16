@@ -63,12 +63,10 @@ class CP_Usage:
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-def Stage1(ObjList, DirToRead, DirToWrite, DirToMove):
+def Stage1(ObjList, DirToRead, DirToWrite, DirToMove, debug=False):
     #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage
-
     files_read = 0
     files_written = 0
-
     for file in glob.glob(DirToRead + 'cradlepoint_stats-2*-[0-3][0-9].csv'):
         #initiate empty list for each file
         file_temp = []
@@ -77,13 +75,9 @@ def Stage1(ObjList, DirToRead, DirToWrite, DirToMove):
             csv_reader = csv.reader(csv_file, delimiter=',')
             for row in csv_reader:
                 file_temp.append(row)
-        
-        #increment file counter
         files_read += 1
-        
         #grab the date string out of the flie name
         file_date=file[len(file)-14:-4]
-        
         #Add the date as an element at the end of each list member
         header_row = True
         for row in file_temp:
@@ -103,12 +97,10 @@ def Stage1(ObjList, DirToRead, DirToWrite, DirToMove):
                             break
                 else:
                     CreateNewObject(ObjList, row[0])
-                    new_objects += 1
-                    #write data to object
+                    #new_objects += 1
                     #Since we just added the object we should be able to reference the last object in the list
                     #'Device_Name': row[0], 'date':row[3], 'MB_Used': row[2]
                     ObjList[len(ObjList)-1].AddUsage(row[3],row[2])
-    
         try:
             #dump the list back to a csv file with a new name
             file_to_write = DirToWrite + file[len(file)-32:-4] + '-WithDate.csv'
@@ -126,10 +118,10 @@ def Stage1(ObjList, DirToRead, DirToWrite, DirToMove):
         os.replace(file , DirToMove + file[len(file)-32:])
     except:
         print(f'Moving file {file} failed')
-
     #print counters
-    print (f'{files_read} files read')
-    print (f'{files_written} files written')
+    if debug:
+        print (f'{files_read} files read')
+        print (f'{files_written} files written')
 
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
