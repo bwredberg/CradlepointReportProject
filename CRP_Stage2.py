@@ -58,15 +58,18 @@ class CP_Usage:
 
 
 #===========================================================================        
-def Stage1(ObjList):
+
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+
+def Stage1(ObjList, DirToRead, DirToWrite, DirToMove):
     #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage
-    directory_to_read = "c:/temp/CradlepointReportProject/OriginalFiles/"
-    directory_to_write = "c:/temp/CradlepointReportProject/Stage1/"
-    directory_to_move = "c:/Temp/CradlepointReportProject/OriginalFiles/imported/"
+
     files_read = 0
     files_written = 0
 
-    for file in glob.glob(directory_to_read + 'cradlepoint_stats-2*-[0-3][0-9].csv'):
+    for file in glob.glob(DirToRead + 'cradlepoint_stats-2*-[0-3][0-9].csv'):
         #initiate empty list for each file
         file_temp = []
         #read in each CSV file and dump it to file_temp
@@ -91,10 +94,24 @@ def Stage1(ObjList):
             else:
                 #add the date to the end of each non-header row
                 row.append(file_date)
+                for n in range(0,len(ObjList)):
+                        if str(row[0]) in ObjList[n].name:            
+                            #This will match if row[0] matches CPObjectList[n].name and write data to existing object
+                            #'Device_Name': row[0], 'date':row[3], 'MB_Used': row[2]
+                            ObjList[n].AddUsage(row[3],row[2])
+                            #quit iteration if you've found it
+                            break
+                else:
+                    CreateNewObject(ObjList, row[0])
+                    new_objects += 1
+                    #write data to object
+                    #Since we just added the object we should be able to reference the last object in the list
+                    #'Device_Name': row[0], 'date':row[3], 'MB_Used': row[2]
+                    ObjList[len(ObjList)-1].AddUsage(row[3],row[2])
     
         try:
             #dump the list back to a csv file with a new name
-            file_to_write = directory_to_write + file[len(file)-32:-4] + '-WithDate.csv'
+            file_to_write = DirToWrite + file[len(file)-32:-4] + '-WithDate.csv'
             with open(file_to_write, 'w', newline='') as csv_file:
                 writefile = csv.writer(csv_file, delimiter=',')
                 writefile.writerows(file_temp)
@@ -106,13 +123,17 @@ def Stage1(ObjList):
     try:
         #move file to C:\Temp\CradlepointReportProject\OriginalFiles\imported folder
         #will overwrite if the destination file exists
-        os.replace(file , directory_to_move + file[len(file)-32:])
+        os.replace(file , DirToMove + file[len(file)-32:])
     except:
         print(f'Moving file {file} failed')
 
     #print counters
     print (f'{files_read} files read')
     print (f'{files_written} files written')
+
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
 def SaveToFile(ObjList, SaveDir):
     #ObjList in this case should always be CPObjectList
@@ -482,6 +503,9 @@ def UsageMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNameP
 CPObjectList = [] #create empty object list
 FileSaved = False
 SourceDir = 'C:\\Temp\\CradlepointReportProject\\Stage2\\' #location where the source files exist
+directory_to_read = "c:/temp/CradlepointReportProject/OriginalFiles/"
+directory_to_write = "c:/temp/CradlepointReportProject/Stage1/"
+directory_to_move = "c:/Temp/CradlepointReportProject/OriginalFiles/imported/"
 SaveFileDir = SourceDir + 'Save_File\\' #location where the save file exists
 FrontEndMenuOptions = [1,2,3,4,8] #These are the valid selections for the Front end menu
 UsageMenuOptions = [1,2,3,4,5,7,8] #These are the valid selections for the Usage menu
