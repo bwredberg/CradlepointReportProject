@@ -64,7 +64,7 @@ class CP_Usage:
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
 def Stage1(ObjList, DirToRead, DirToWrite, DirToMove, debug=False):
-    #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage
+    #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage.
     files_read = 0
     files_written = 0
     for file in glob.glob(DirToRead + 'cradlepoint_stats-2*-[0-3][0-9].csv'):
