@@ -45,17 +45,14 @@ class CP_Usage:
         self.DataUsage.loc[len(self.DataUsage.index)] = [date,usage]
         #convert Date column to type Date
         self.DataUsage['Date'] = pd.to_datetime(self.DataUsage['Date'])
-        #update Avg, High, Total, Entries
+        #update stats on each data update
         self.TotalUsage = self.DataUsage['MB_Used'].sum()
-        ###self.HighUsageSeries = self.DataUsage.max(axis='index', numeric_only=True)
-        ###self.HighUsage = self.HighUsageSeries[0]
         self.HighUsageSeries = self.DataUsage.loc[self.DataUsage['MB_Used'].idxmax()]
         self.HighUsageDate = self.HighUsageSeries[0].date()
         self.HighUsage = self.HighUsageSeries[1]
         self.NumberOfEntries = len(self.DataUsage.index)
         self.AvgUsage = self.TotalUsage / self.NumberOfEntries
         self.DateFirstSeen = self.DataUsage['Date'].min().date()
-        #self.DateFirstSeen = self.DateFirstSeenSeries.date()
 
 
 #===========================================================================        
@@ -67,7 +64,6 @@ class CP_Usage:
 def ImportDataCSVFromDir(ObjList, SourceDir, MoveFiles=True, ShowResults=True):
     #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage.
     directory_to_read = SourceDir + "OriginalFiles\\"
-    #directory_to_write = directory_to_read + "Modified\\"
     directory_to_move = directory_to_read + "Imported\\"
     files_read = 0
     files_written = 0
@@ -186,6 +182,21 @@ def FindObjectIndex(ObjList, DeviceName):
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+
+def FindLargestObject(ObjList):
+    #iterate through the ObjList and find the largest by single usage date
+    #returns the index number for the highest usage object 
+    tempHigh = 0
+    tempIndex = 0
+    for Object in ObjList:
+        print(f'Object = {Object}')
+        print(f'Current tempHigh = {tempHigh}')
+        print(f'Current Object HighUsage = {Object.HighUsage}')
+        if Object.HighUsage > tempHigh:
+            tempHigh = Object.HighUsage
+            tempIndex = Object
+    return tempIndex
+
 
 def ShowUsageByIndex(ObjList, UsageOutput_type, Index, asc_order_int = 1, max_rows=None, value=750):
     #ObjList should be CPObjectList
@@ -371,7 +382,7 @@ def FrontEndMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNa
             LoadFrontEndMenu()
             FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
         case 2:  #Save data to file
-            print(f'You selected menu option 2 - Save data to file')
+            #print(f'You selected menu option 2 - Save data to file')
             if GetUserMenuInput(PromptForSave, StringMenuOpions, type_=str) in ["YES","Y"]:
                 Saved = SaveToFile(ObjList, SaveFileDir)
             else:
@@ -428,7 +439,6 @@ def UsageMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNameP
             LoadUsageMenu()
             UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
         case 5:  #Show usage above 750MB for a device
-            #ShowUsageGreaterThanByIndex(ObjList, FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)),750)
             ShowUsageByIndex(ObjList, 'GreaterThan', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None, value=750)
             print(f'')
             Pause()
