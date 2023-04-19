@@ -189,9 +189,9 @@ def FindLargestObject(ObjList):
     tempHigh = 0
     tempIndex = 0
     for Object in ObjList:
-        print(f'Object = {Object}')
-        print(f'Current tempHigh = {tempHigh}')
-        print(f'Current Object HighUsage = {Object.HighUsage}')
+        #print(f'Object = {Object}')
+        #print(f'Current tempHigh = {tempHigh}')
+        #print(f'Current Object HighUsage = {Object.HighUsage}')
         if Object.HighUsage > tempHigh:
             tempHigh = Object.HighUsage
             tempIndex = Object
@@ -324,7 +324,7 @@ def LoadUsageMenu():
     print(f'3) Show usage data sorted by amount'      )
     print(f'4) Show usage summary for a device'       )
     print(f'5) Show usage above 750MB for a device'   )
-    print(f''                                         )
+    print(f'6) Find largest usage by object'          )
     print(f'7) List all devices'                      )
     print(f'8) Exit to main menu'                     )
     print(f'*****************************************')  #41 *'s    
@@ -444,6 +444,13 @@ def UsageMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNameP
             Pause()
             LoadUsageMenu()
             UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+        case 6: #find largest usage by object
+            ObjIndex = FindObjectIndex(ObjList, FindLargestObject(ObjList))
+            print(f'\nThe Cradlepoint with the highest 24h usage is {ObjList[ObjIndex]}')
+            print(f'The usage was {round(ObjList[ObjIndex].HighUsage, 2):,} on {ObjList[ObjIndex].HighUsageDate}\n')
+            Pause()
+            LoadUsageMenu()
+            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
         case 7:  #Show list of all devices
             ListAllObjects(ObjList)
             print(f'')
@@ -465,7 +472,7 @@ FileSaved = False
 SourceDir = 'C:\\Temp\\CradlepointReportProject\\' #location where the source files exist
 SaveFileDir = SourceDir + 'Save_File\\' #location where the save file exists
 FrontEndMenuOptions = [1,2,3,4,8] #These are the valid selections for the Front end menu
-UsageMenuOptions = [1,2,3,4,5,7,8] #These are the valid selections for the Usage menu
+UsageMenuOptions = [1,2,3,4,5,6,7,8] #These are the valid selections for the Usage menu
 SortOrderOptions = [1,2] #These are the valid selections for ascending or decending order
 StringMenuOpions = ['YES','NO','Y','N'] #These are the valid selections for Yes/No questions
 PromptForDeviceName = 'Please enter a device name: '
