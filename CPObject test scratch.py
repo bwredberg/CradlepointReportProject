@@ -180,3 +180,51 @@ def ShowUsageGreaterThanByIndex(ObjList, Index, value):
     else:    
         print (f'**ShowUsageGreaterThan ERROR** There is no Cradlepoint at the index {Index}')
         return
+
+def ImportDataCSVFromDir(ObjList, DirToRead, MoveFiles=True, ShowResults=True):
+    #Parses a passed directory path and reads in all CSVfiles that match the file name
+    #MoveFiles Boolean True = move the read in files to the imported directory, False = leave the read in files where they are
+    #ShowResults Boolean True = show result stats at the end of the import, False = skip the result stats
+    DirToMove = DirToRead + "imported\\"
+    files_read = 0
+    files_written = 0
+    new_objects = 0
+
+    for file in glob.glob(DirToRead + 'cradlepoint_stats-2*-WithDate.csv'):
+        #read in each CSV file and ...
+        with open(file) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            files_read += 1
+            header_row = True
+            for row in csv_reader:
+                if header_row:
+                    #Skip this row
+                    header_row = False
+                else:
+                    for n in range(0,len(ObjList)):
+                        if str(row[0]) in ObjList[n].name:            
+                            #This will match if row[0] matches CPObjectList[n].name and write data to existing object
+                            #'Device_Name': row[0], 'date':row[3], 'MB_Used': row[2]
+                            ObjList[n].AddUsage(row[3],row[2])
+                            #quit iteration if you've found it
+                            break
+                    else:
+                        CreateNewObject(ObjList, row[0])
+                        new_objects += 1
+                        #write data to object
+                        #Since we just added the object we should be able to reference the last object in the list
+                        #'Device_Name': row[0], 'date':row[3], 'MB_Used': row[2]
+                        ObjList[len(ObjList)-1].AddUsage(row[3],row[2])
+        if MoveFiles:
+            try:
+                #move file to DirToRead + \imported folder
+                #will overwrite if the destination file exists
+                os.replace(file , DirToMove + file[len(file)-41:]) #this just depends on the lenght of the file name
+                files_written += 1
+            except:
+                print(f'Moving file {file} failed')
+    if ShowResults:
+        print(f'\n{files_read} Files read in')
+        print(f'{new_objects} New CP objects created')
+        print(f'{files_written} Files moved to /imported')
+        print(f'')
