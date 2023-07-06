@@ -6,6 +6,13 @@ import pandas as pd
 import pickle
 import sys
 
+color_reset = '\033[0m'
+color_green = '\033[92m'
+color_red = '\033[91m'
+color_blue = '\033[94m'
+color_yellow = '\033[93m'
+color_magenta = '\033[95m'
+color_cyan = '\033[96m'
 
 #**************************************************************************************
 #**                             TO-DO List                                           **
@@ -61,7 +68,7 @@ class CP_Usage:
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-def ImportDataCSVFromDir(ObjList, SourceDir, MoveFiles=True, ShowResults=True):
+def ImportDataCSVFromDir(ObjList: list, SourceDir: str, MoveFiles:bool=True, ShowResults:bool=True) -> None:
     #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage.
     directory_to_read = SourceDir + "OriginalFiles\\"
     directory_to_move = directory_to_read + "Imported\\"
@@ -130,7 +137,7 @@ def ImportDataCSVFromDir(ObjList, SourceDir, MoveFiles=True, ShowResults=True):
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-def SaveToFile(ObjList, SaveDir):
+def SaveToFile(ObjList:list, SaveDir:str) -> bool: 
     #ObjList in this case should always be CPObjectList
     #SaveDir is the string path to save the file to
     if not os.path.exists(SaveDir):
@@ -139,13 +146,13 @@ def SaveToFile(ObjList, SaveDir):
     try:
         with open(SaveDir+'CPObject_save.pkl','wb') as file:
             pickle.dump(ObjList,file)
-        print(f'File saved')
+        print(f'{color_yellow}File saved{color_reset}')
         return True
     except:
-        print(f'File save failed.')
+        print(f'{color_red}File save failed.{color_reset}')
         return False
 
-def LoadFromFile(SaveDir, debug=False):
+def LoadFromFile(SaveDir:str, debug:bool=False) -> list:
     #SaveDir is the string path to save the file to
     ObjList = []  #Load into an empty list
     if debug:
@@ -155,22 +162,22 @@ def LoadFromFile(SaveDir, debug=False):
         try:
             with open(SaveDir+'CPObject_save.pkl','rb') as file:
                 ObjList = pickle.load(file)
-            print(f'File load succeeded\n')
+            print(f'{color_yellow}File load succeeded{color_reset}\n')
         except:
-            print(f'File load failed.\n')
+            print(f'{color_red}File load failed.{color_reset}\n')
         if debug:
             print(ObjList)
             Pause()
         return ObjList
     else:
-        print(f'Save file can''t be found.')
+        print(f"{color_red}Save file can't be found.{color_reset}")
 
-def CreateNewObject(ObjList, DeviceName):
+def CreateNewObject(ObjList:list, DeviceName:str) -> None:
     #DeviceName must be a string
     #Add a new Cradlepoint Object into the Object List
     ObjList.append(CP_Usage(DeviceName))
 
-def FindObjectIndex(ObjList, DeviceName):
+def FindObjectIndex(ObjList:list, DeviceName:str) -> int:
     #ObjList should be CPObjectList
     #DeviceName must be a string
     #search through the Cradlepoint Object list for any object with the given name and return its index number
@@ -183,22 +190,18 @@ def FindObjectIndex(ObjList, DeviceName):
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-def FindLargestObject(ObjList):
+def FindLargestObject(ObjList:list) -> int:
     #iterate through the ObjList and find the largest by single usage date
     #returns the index number for the highest usage object 
     tempHigh = 0
     tempIndex = 0
     for Object in ObjList:
-        #print(f'Object = {Object}')
-        #print(f'Current tempHigh = {tempHigh}')
-        #print(f'Current Object HighUsage = {Object.HighUsage}')
         if Object.HighUsage > tempHigh:
             tempHigh = Object.HighUsage
-            tempIndex = Object
+            tempIndex += 1
     return tempIndex
 
-
-def ShowUsageByIndex(ObjList, UsageOutput_type, Index, asc_order_int = 1, max_rows=None, value=750):
+def ShowUsageByIndex(ObjList:list, UsageOutput_type:str, Index:int, asc_order_int:int=1, max_rows:int=None, value:int=750) -> None:
     #ObjList should be CPObjectList
     #UsageOutput_type should be a str in ['Raw','Date','MB_Used']
     #Index must be an int
@@ -261,22 +264,21 @@ def ShowUsageByIndex(ObjList, UsageOutput_type, Index, asc_order_int = 1, max_ro
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 #*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
 
-def ListAllObjects(ObjList):
+def ListAllObjects(ObjList:list) -> None:
     #Display all currently know CP Objects
-    #  good enough for now, but should figure out how to format this
-    #  see  https://stackoverflow.com/questions/1524126/how-to-print-a-list-more-nicely
-    print(*ObjList)
+    temp_list = sorted([object.name for object in ObjList])
+    for c1,c2,c3,c4,c5,c6 in zip(temp_list[::6], temp_list[1::6], temp_list[2::6], temp_list[3::6], temp_list[4::6], temp_list[5::6]):
+        print (f'{c1:<20}{c2:<20}{c3:<20}{c4:<20}{c5:<20}{c6:<}')
     return
 
-def ObjectExists(ObjName):
-    #ObjName must be a string
+def ObjectExists(ObjName:str) -> bool:
     #search through the Cradlepoint Object list for any object with the given name
     for n in range(0,len(CPObjectList)):
         if str(ObjName) in CPObjectList[n].name:
             return True
     return False 
 
-def OutputObjectInfoByIndex(ObjList, Index):
+def OutputObjectInfoByIndex(ObjList:list, Index:int) -> None:
     #Prints out details based on the index number from CPObjectList
     if Index >= 0 and Index <= len(ObjList):
         print('='*41)
@@ -294,12 +296,12 @@ def OutputObjectInfoByIndex(ObjList, Index):
         print (f'**ShowObjectInfoByIndex ERROR** There is no Cradlepoint at the index {Index}') 
         return
 
-def Pause():
+def Pause() -> None:
     #"Press any key to continue . . ."
     os.system('pause')
     return
 
-def LoadFrontEndMenu():
+def LoadFrontEndMenu() -> None:
     print(f''                                         )
     print(f'*****************************************')  #41 *'s
     print(f'* Cradlepoint Usage Reporting Main Menu *')
@@ -314,7 +316,7 @@ def LoadFrontEndMenu():
     print(f'*****************************************')  #41 *'s
    
 
-def LoadUsageMenu():
+def LoadUsageMenu() -> None:
     print(f''                                         )
     print(f'*****************************************')  #41 *'s
     print(f'*           Show Usage Menu             *')
@@ -323,14 +325,14 @@ def LoadUsageMenu():
     print(f'2) Show usage data sorted by date'        )
     print(f'3) Show usage data sorted by amount'      )
     print(f'4) Show usage summary for a device'       )
-    print(f'5) Show usage above 750MB for a device'   )
+    print(f'5) Show usage above 1000MB for a device'  )
     print(f'6) Find largest usage by object'          )
     print(f'7) List all devices'                      )
     print(f'8) Exit to main menu'                     )
     print(f'*****************************************')  #41 *'s    
 
 
-def GetUserMenuInput(Prompt, OptionList, type_=int, debug = False):
+def GetUserMenuInput(Prompt:str, OptionList:list, type_=int, debug:bool=False):
     #Prompt = string - is the user prompt
     #OptionList = list - should include all valid input options
     #type_ = string - should be a valid type like int, str, float, etc...
@@ -352,7 +354,7 @@ def GetUserMenuInput(Prompt, OptionList, type_=int, debug = False):
         print(f'UserInput = {UserInput}')
     return UserInput
 
-def GetUserObjectInput(Prompt):
+def GetUserObjectInput(Prompt:str) -> str:
     #Prompt = string - should be a Cradlepoint device name
     while True:
         try:
@@ -364,7 +366,7 @@ def GetUserObjectInput(Prompt):
             break
     return UserInput
 
-def FrontEndMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNamePrompt):
+def FrontEndMenu_UserInputEval(ObjList:list, Saved:bool, UserInput:int, NumberPrompt:str, DeviceNamePrompt:str) -> None:
     #ObjList should be CPObjectList
     #Saved is a boolean to track if the file has been saved or not
     #UserInput is an int, the users choice
@@ -390,8 +392,8 @@ def FrontEndMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNa
             LoadFrontEndMenu()
             FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
         case 3:  #Import new data files
-            print(f'This will load new CSV files from {SourceDir}OriginalFiles\\')
-            Pause()
+            print(f'Loading files from {SourceDir}OriginalFiles\\...')
+            #Pause()
             ImportDataCSVFromDir(ObjList, SourceDir, MoveFiles=True, ShowResults=True)
             Pause()
             LoadFrontEndMenu()
@@ -410,7 +412,7 @@ def FrontEndMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNa
         case _:
             print(f'FrontEndMenu_UserInputEval - Not a valid option')
 
-def UsageMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNamePrompt):
+def UsageMenu_UserInputEval(ObjList:list, Saved:bool, UserInput:int, NumberPrompt:int, DeviceNamePrompt:str) -> None:
     match UserInput:
         case 1:  #Show raw usage data
             ShowUsageByIndex(ObjList, 'Raw', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None)
@@ -439,16 +441,18 @@ def UsageMenu_UserInputEval(ObjList, Saved, UserInput, NumberPrompt, DeviceNameP
             LoadUsageMenu()
             UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
         case 5:  #Show usage above 750MB for a device
-            ShowUsageByIndex(ObjList, 'GreaterThan', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None, value=750)
+            ShowUsageByIndex(ObjList, 'GreaterThan', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None, value=1000)
             print(f'')
             Pause()
             LoadUsageMenu()
             UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
         case 6: #find largest usage by object
-            ObjIndex = FindObjectIndex(ObjList, FindLargestObject(ObjList))
-            print(f'\nThe Cradlepoint with the highest 24h usage is {ObjList[ObjIndex]}')
-            print(f'The usage was {round(ObjList[ObjIndex].HighUsage, 2):,} on {ObjList[ObjIndex].HighUsageDate}\n')
-            Pause()
+            ObjIndex = FindLargestObject(ObjList)
+            print(f'\nThe Cradlepoint with the highest 24h usage is {color_blue}{ObjList[ObjIndex]}{color_reset}')
+            print(f'The usage was {color_blue}{round(ObjList[ObjIndex].HighUsage, 2):,}MB{color_reset} on {color_blue}{ObjList[ObjIndex].HighUsageDate}{color_reset}\n')
+            #TopTen = FindTop10HighestDays(ObjList)
+            #Print(f'This is the TopTen items {TopTen}')
+            #Pause()
             LoadUsageMenu()
             UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
         case 7:  #Show list of all devices
