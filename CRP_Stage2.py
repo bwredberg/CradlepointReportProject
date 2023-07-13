@@ -4,7 +4,7 @@ import glob
 import os
 import pandas as pd
 import pickle
-import sys
+import sqlite3
 
 color_reset = '\033[0m'
 color_green = '\033[92m'
@@ -28,12 +28,11 @@ color_cyan = '\033[96m'
 #**                                                                                  **
 #**************************************************************************************
 
-
+'''
 class CP_Usage:
     #Created the Cradlepoint objects
     def __init__(self, name):
         self.name = name
-        #self.description = description
         self.DataUsage = pd.DataFrame(columns=['Date', 'MB_Used'])
         self.AvgUsage = 0.0  #avg across all usage entries
         self.HighUsage = 0.0  #highest single usage entry
@@ -61,13 +60,192 @@ class CP_Usage:
         self.AvgUsage = self.TotalUsage / self.NumberOfEntries
         self.DateFirstSeen = self.DataUsage['Date'].min().date()
 
-
+'''
 #===========================================================================        
 
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+def SQLImportDataCSVFromDir(SourceDir:str, MoveFiles:bool=True, ShowResults:bool=True) -> list:
+    #Will need to read in the file and find the date from the filename, then add the data to the database
+    directory_to_read = SourceDir + "OriginalFiles\\"
+    directory_to_move = directory_to_read + "Imported\\"
+    #db_table = "data_usage"
+    files_read = 0
+    files_written = 0
+    for file in glob.glob(directory_to_read + 'cradlepoint_stats-2*-[0-3][0-9].csv'):
+        #initiate empty list for each file
+        file_temp = []
+        #read in each CSV file and dump it to file_temp
+        with open(file) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter=',')
+            for row in csv_reader:
+                file_temp.append(row)
+        files_read += 1
+        #grab the date string out of the flie name
+        file_date=file[len(file)-14:-4]
+        #Add the date as an element at the end of each list member
+        header_row = True
+        data = []
+        for row in file_temp:
+            if header_row:
+                #add date to the end of the header row
+                row.append('date')
+                header_row = False
+            else:
+                #add the date to the end of each non-header rowq
+                #row.append(file_date)
+                data.append((row[0], row[2], file_date))
+        #print(data)
+        conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+        cursor = conn.cursor()
+        cursor.executemany('INSERT INTO data_usage (Cradlepoint, MB_used, date) VALUES (?, ?, ?)', data)
+        conn.commit()
+        conn.close()
+        if MoveFiles:
+            try:
+                #move file to DirToRead + \imported folder
+                #will overwrite if the destination file exists
+                os.replace(file , directory_to_move + file[len(file)-32:]) #this just depends on the lenght of the file name
+                files_written += 1
+            except:
+                print(f'Moving imported file {file} failed')
+    if ShowResults:
+        print(f'\n{files_read} Files read in')
+        #print(f'{new_objects} New CP objects created')
+        print(f'{files_written} Files moved to /imported')
+        print(f'')
+    return SQLListAllObjects(SourceDir=SourceDir, output=False)
 
+def SQLListAllObjects(SourceDir:str, output:bool) -> list:
+    #Display all currently know CP Objects
+    conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+    conn.row_factory = lambda cursor, row: row[0]
+    cursor = conn.cursor()
+    cp_list = cursor.execute('SELECT Cradlepoint FROM data_usage').fetchall()
+    cp_list = sorted(set(cp_list))
+    if output:
+        for c1,c2,c3,c4,c5,c6 in zip(cp_list[::6], cp_list[1::6], cp_list[2::6], cp_list[3::6], cp_list[4::6], cp_list[5::6]):
+            print (f'{c1:<20}{c2:<20}{c3:<20}{c4:<20}{c5:<20}{c6:<}')
+    conn.close()
+    return cp_list
+
+def SQLFindLargestObject(SourceDir:str) -> tuple:
+    #find the largest by single usage date
+    #returns a tuple containing (Cradlepoint, MB_used, date) 
+    conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+    cursor = conn.cursor()
+    max_usage = cursor.execute('SELECT Cradlepoint, MB_used, date FROM data_usage WHERE MB_used = (SELECT MAX(MB_used) FROM data_usage)').fetchone()
+    conn.close()
+    return max_usage
+
+def SQLFindTopXHighestDays(SourceDir:str, top_x:int=10) -> None:
+    #Find and display the top X usage days of all time
+    conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+    cursor = conn.cursor()
+    query = 'SELECT Cradlepoint, MB_used, date FROM data_usage ORDER BY MB_used DESC LIMIT {}'.format(top_x)
+    max_usage_top_x = cursor.execute(query).fetchall()
+    print("\nCP Name             Data Usage  Date      ")
+    print("==========================================")
+    for entry in max_usage_top_x:
+        data_usage_formated = f"{round(entry[1],2):,}"
+        print(f'{entry[0]:<20}{data_usage_formated:<12}{entry[2]}')
+    print("")
+    conn.close()
+    return
+
+def SQLOutputObjectInfoByName(SourceDir:str, cp_name:str, master_cp_list:list) -> None:
+    #Prints out details based on the index number from CPObjectList
+    if cp_name in master_cp_list:
+        conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+        cursor = conn.cursor()
+        max_usage = cursor.execute('SELECT MAX(MB_used), date FROM data_usage WHERE Cradlepoint = ?', (cp_name,)).fetchone()
+        earliest_date = cursor.execute('SELECT date FROM data_usage WHERE Cradlepoint = ? ORDER BY date ASC LIMIT 1', (cp_name,)).fetchone()
+        total_data_used = cursor.execute('SELECT SUM(MB_used) FROM data_usage WHERE Cradlepoint = ?', (cp_name,)).fetchone()
+        count = cursor.execute('SELECT COUNT(MB_used) FROM data_usage WHERE Cradlepoint = ?', (cp_name,)).fetchone()
+        #print(f'total_data_used = {total_data_used}')
+        #print(f"Max usage = {max_usage}")
+        #print(f'Earliest date = {earliest_date}')
+        #print(f'Count = {count}')
+        conn.close()
+        print('='*42)
+        print(f'Date first seen\t\t\t{earliest_date[0]}')
+        print(f'Total Usage (MB)\t\t{round(total_data_used[0], 2):,}') 
+        print(f'Number of Entries\t\t{count[0]:,}')
+        print(f'Average (MB)\t\t\t{round(total_data_used[0]/count[0], 2):,}')
+        print(f'Highest 24h Usage (MB)\t\t{round(max_usage[0], 2):,}')
+        print(f'Date of Highest 24h Usage\t{max_usage[1]}')
+        return
+    else:
+        print(f'{color_red}No Cradlepoint found by that name{color_reset}')
+        return
+    
+def SQLShowUsageByName(SourceDir:str, cp_name:str, master_cp_list:list, UsageOutput_type:str, asc_order_int:int=1, max_rows:int=None, value:int=1000) -> None:
+    #UsageOutput_type should be a str in ['Raw','date','MB_used','GreaterThan']
+    #value is an int for the data cutoff to return
+    #determine sort order and output text
+    if UsageOutput_type == 'date':
+        if int(asc_order_int) == 2:
+            Sort_text = 'newest to oldest'
+            asc_order = 'DESC'
+        else:
+            Sort_text = 'oldest to newest'
+            asc_order = 'ASC'
+    elif UsageOutput_type == 'MB_used':
+        if int(asc_order_int) == 2:
+            Sort_text = 'largest to smallest'
+            asc_order = 'DESC'
+        else:
+            Sort_text = 'smallest to largest'
+            asc_order = 'ASC'
+    #output the results
+    if cp_name in master_cp_list:
+        conn = sqlite3.connect(SourceDir + 'cradlepoint_usage.db')
+        cursor = conn.cursor()        
+        if UsageOutput_type == 'Raw':
+            query = 'SELECT MB_used, date FROM data_usage WHERE Cradlepoint = ?'
+            cp_usage_data_tuple = cursor.execute(query, (cp_name,)).fetchall()
+            #print(cp_usage_data_tuple)
+            print(f'\nCradlepoint {cp_name} raw usage data')
+            print('-' * len(f'Cradlepoint {cp_name} raw usage data'))
+            print("Date\t\tUsage(MB)")
+            print('-' * len(f'Cradlepoint {cp_name} raw usage data'))
+            for entry in cp_usage_data_tuple:
+                print(f"{entry[1]}\t{round(entry[0],2)}")
+        elif UsageOutput_type in ['date','MB_used']:
+            query = 'SELECT MB_used, date FROM data_usage WHERE Cradlepoint = ? ORDER BY {} {}'.format(UsageOutput_type, asc_order)
+            cp_usage_data_tuple = cursor.execute(query, (cp_name,)).fetchall()
+            #print(cp_usage_data_tuple)
+            print(f'\nCradlepoint {cp_name} data usage sorted by {UsageOutput_type} - {Sort_text}')
+            print('-' * (2 + len(f'Cradlepoint {cp_name} data usage sorted by {UsageOutput_type} - {Sort_text}')))
+            print("Date\t\tUsage(MB)")
+            print('-' * (2 + len(f'Cradlepoint {cp_name} data usage sorted by {UsageOutput_type} - {Sort_text}')))
+            for entry in cp_usage_data_tuple:
+                print(f"{entry[1]}\t{round(entry[0],2)}")
+        elif UsageOutput_type == 'GreaterThan':
+            #output = ObjList[Index].DataUsage.query('MB_Used >= @value')
+            query = 'SELECT MB_used, date FROM data_usage WHERE Cradlepoint = ? AND MB_used > ? ORDER BY MB_used DESC'
+            cp_usage_data_tuple = cursor.execute(query, (cp_name, value,)).fetchall()
+            #print(cp_usage_data_tuple)
+            print(f'\nCradlepoint {cp_name} data usage greater than {value}MB')
+            print('=' * (2+ len(f'\nCradlepoint {cp_name} data usage greater than {value}MB')))
+            print("Date\t\tUsage(MB)")
+            print('=' * (2+ len(f'\nCradlepoint {cp_name} data usage greater than {value}MB')))
+            for entry in cp_usage_data_tuple:
+                print(f"{entry[1]}\t{round(entry[0],2)}")
+            return
+        else:
+            print(f'\nThere are no entries greater than or equal to {value}MBs for that Cradlepoint')
+            return   
+    else:
+        print (f'{color_red}**ShowUsageByName {UsageOutput_type} ERROR** There is no Cradlepoint by name {cp_name}{color_reset}')
+        return
+
+
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
+'''
 def ImportDataCSVFromDir(ObjList: list, SourceDir: str, MoveFiles:bool=True, ShowResults:bool=True) -> None:
     #Will need to read in the file and find the date from the filename, then either create a new object or run AddUsage.
     directory_to_read = SourceDir + "OriginalFiles\\"
@@ -132,11 +310,8 @@ def ImportDataCSVFromDir(ObjList: list, SourceDir: str, MoveFiles:bool=True, Sho
         print(f'{new_objects} New CP objects created')
         print(f'{files_written} Files moved to /imported')
         print(f'')
-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-
+'''
+'''
 def SaveToFile(ObjList:list, SaveDir:str) -> bool: 
     #ObjList in this case should always be CPObjectList
     #SaveDir is the string path to save the file to
@@ -151,7 +326,8 @@ def SaveToFile(ObjList:list, SaveDir:str) -> bool:
     except:
         print(f'{color_red}File save failed.{color_reset}')
         return False
-
+'''
+'''
 def LoadFromFile(SaveDir:str, debug:bool=False) -> list:
     #SaveDir is the string path to save the file to
     ObjList = []  #Load into an empty list
@@ -171,12 +347,14 @@ def LoadFromFile(SaveDir:str, debug:bool=False) -> list:
         return ObjList
     else:
         print(f"{color_red}Save file can't be found.{color_reset}")
-
+'''
+'''
 def CreateNewObject(ObjList:list, DeviceName:str) -> None:
     #DeviceName must be a string
     #Add a new Cradlepoint Object into the Object List
     ObjList.append(CP_Usage(DeviceName))
-
+'''
+'''
 def FindObjectIndex(ObjList:list, DeviceName:str) -> int:
     #ObjList should be CPObjectList
     #DeviceName must be a string
@@ -185,11 +363,8 @@ def FindObjectIndex(ObjList:list, DeviceName:str) -> int:
         if str(DeviceName) in ObjList[n].name:
             return n
     return -1 #No object with that name found
-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-
+'''
+'''
 def FindLargestObject(ObjList:list) -> int:
     #iterate through the ObjList and find the largest by single usage date
     #returns the index number for the highest usage object 
@@ -200,7 +375,8 @@ def FindLargestObject(ObjList:list) -> int:
             tempHigh = Object.HighUsage
             tempIndex += 1
     return tempIndex
-
+'''
+'''
 def ShowUsageByIndex(ObjList:list, UsageOutput_type:str, Index:int, asc_order_int:int=1, max_rows:int=None, value:int=750) -> None:
     #ObjList should be CPObjectList
     #UsageOutput_type should be a str in ['Raw','Date','MB_Used']
@@ -259,25 +435,24 @@ def ShowUsageByIndex(ObjList:list, UsageOutput_type:str, Index:int, asc_order_in
     else:
         print (f'**ShowUsageByIndex {UsageOutput_type} ERROR** There is no Cradlepoint at index {Index}')
         return
-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-#*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-
-
+'''
+'''
 def ListAllObjects(ObjList:list) -> None:
     #Display all currently know CP Objects
     temp_list = sorted([object.name for object in ObjList])
     for c1,c2,c3,c4,c5,c6 in zip(temp_list[::6], temp_list[1::6], temp_list[2::6], temp_list[3::6], temp_list[4::6], temp_list[5::6]):
         print (f'{c1:<20}{c2:<20}{c3:<20}{c4:<20}{c5:<20}{c6:<}')
     return
-
+'''
+'''
 def ObjectExists(ObjName:str) -> bool:
     #search through the Cradlepoint Object list for any object with the given name
     for n in range(0,len(CPObjectList)):
         if str(ObjName) in CPObjectList[n].name:
             return True
     return False 
-
+'''
+'''
 def OutputObjectInfoByIndex(ObjList:list, Index:int) -> None:
     #Prints out details based on the index number from CPObjectList
     if Index >= 0 and Index <= len(ObjList):
@@ -295,6 +470,7 @@ def OutputObjectInfoByIndex(ObjList:list, Index:int) -> None:
     else:
         print (f'**ShowObjectInfoByIndex ERROR** There is no Cradlepoint at the index {Index}') 
         return
+'''
 
 def Pause() -> None:
     #"Press any key to continue . . ."
@@ -306,11 +482,12 @@ def LoadFrontEndMenu() -> None:
     print(f'*****************************************')  #41 *'s
     print(f'* Cradlepoint Usage Reporting Main Menu *')
     print(f'*****************************************')  #41 *'s
-    print(f'1) Load saved data file'                  )
-    print(f'2) Save data to file'                     )
+    print(f'1) Import new data files'                 )
     print(f''                                         )
-    print(f'3) Import new data files'                 )
+    print(f''                                         )
     print(f'4) Show usage by device name'             )
+    print(f''                                         )
+    print(f''                                         )
     print(f''                                         )
     print(f'8) Exit'                                  )
     print(f'*****************************************')  #41 *'s
@@ -326,7 +503,7 @@ def LoadUsageMenu() -> None:
     print(f'3) Show usage data sorted by amount'      )
     print(f'4) Show usage summary for a device'       )
     print(f'5) Show usage above 1000MB for a device'  )
-    print(f'6) Find largest usage by object'          )
+    print(f'6) Show top 15 all time usage days'       )
     print(f'7) List all devices'                      )
     print(f'8) Exit to main menu'                     )
     print(f'*****************************************')  #41 *'s    
@@ -366,116 +543,148 @@ def GetUserObjectInput(Prompt:str) -> str:
             break
     return UserInput
 
-def FrontEndMenu_UserInputEval(ObjList:list, Saved:bool, UserInput:int, NumberPrompt:str, DeviceNamePrompt:str) -> None:
+def FrontEndMenu_UserInputEval(SourceDir:str, master_cp_list:list, UserInput:int, NumberPrompt:str, DeviceNamePrompt:str) -> None:
     #ObjList should be CPObjectList
     #Saved is a boolean to track if the file has been saved or not
     #UserInput is an int, the users choice
     #NumberPrompt is a str and is the text the user is prompted
     #DeviceNamePrompt is a str and is the text the user is prompted 
     match UserInput:
-        case 1:  #Load saved data file
-            if ObjList == []:
-                ObjList = LoadFromFile(SaveFileDir, debug=False)
-            else:
-                if GetUserMenuInput(PromptForLoad,StringMenuOpions,type_=str) in ["YES","Y"]:
-                    ObjList = LoadFromFile(SaveFileDir, debug=False)
-                else:
-                    print(f'File Load cancelled.\n')
-            LoadFrontEndMenu()
-            FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
-        case 2:  #Save data to file
-            #print(f'You selected menu option 2 - Save data to file')
-            if GetUserMenuInput(PromptForSave, StringMenuOpions, type_=str) in ["YES","Y"]:
-                Saved = SaveToFile(ObjList, SaveFileDir)
-            else:
-                print(f'File save cancelled.')
-            LoadFrontEndMenu()
-            FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
-        case 3:  #Import new data files
+        case 1:  #Import new data files
             print(f'Loading files from {SourceDir}OriginalFiles\\...')
             #Pause()
-            ImportDataCSVFromDir(ObjList, SourceDir, MoveFiles=True, ShowResults=True)
+            master_cp_list = SQLImportDataCSVFromDir(SourceDir=SourceDir, MoveFiles=True, ShowResults=True)
             Pause()
             LoadFrontEndMenu()
-            FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
+            FrontEndMenu_UserInputEval(SourceDir=SourceDir, 
+                                       master_cp_list=master_cp_list, 
+                                       UserInput=GetUserMenuInput(Prompt=PromptForMenuNumber, OptionList=FrontEndMenuOptions, type_=int, debug=False), 
+                                       NumberPrompt=PromptForMenuNumber, 
+                                       DeviceNamePrompt=PromptForDeviceName)
         case 4:  #Show usage by device name
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                                    master_cp_list=master_cp_list,
+                                    UserInput=GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int),
+                                    NumberPrompt=NumberPrompt,
+                                    DeviceNamePrompt=DeviceNamePrompt)
         case 8:  #Exit program
-            if not Saved:
-                if not GetUserMenuInput(PromptForExit, StringMenuOpions, type_=str, debug=False) in ['YES','Y']:
-                    print(f'Exit cancelled')
-                    LoadFrontEndMenu()
-                    FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
-                else:
-                    print(f'Goodbye')
+            print(f'Goodbye')
         case _:
             print(f'FrontEndMenu_UserInputEval - Not a valid option')
 
-def UsageMenu_UserInputEval(ObjList:list, Saved:bool, UserInput:int, NumberPrompt:int, DeviceNamePrompt:str) -> None:
+def UsageMenu_UserInputEval(SourceDir:str, master_cp_list:list, UserInput:int, NumberPrompt:int, DeviceNamePrompt:str) -> None:
     match UserInput:
         case 1:  #Show raw usage data
-            ShowUsageByIndex(ObjList, 'Raw', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None)
+            SQLShowUsageByName(SourceDir=SourceDir,
+                               cp_name=GetUserObjectInput(Prompt=DeviceNamePrompt),
+                               master_cp_list=master_cp_list,
+                               UsageOutput_type='Raw', 
+                               asc_order_int=1,
+                               max_rows=None)
             print(f'')
             Pause()
             LoadUsageMenu()
             #This calls this function again from inside - concerned about this, but don't have a better way right now
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                                    master_cp_list=master_cp_list,
+                                    UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                                    NumberPrompt=NumberPrompt,
+                                    DeviceNamePrompt=DeviceNamePrompt)
         case 2:  #Show usage data sorted by date
             #the first prompt gets the device name, the second prompt is a choice between 1 and 2 for sort order
-            ShowUsageByIndex(ObjList, 'Date', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), GetUserMenuInput(PromptForDateSortOrder,SortOrderOptions,type_=int), max_rows=None)
+            SQLShowUsageByName(SourceDir=SourceDir,
+                               cp_name=GetUserObjectInput(Prompt=DeviceNamePrompt),
+                               master_cp_list=master_cp_list,
+                               UsageOutput_type='date', 
+                               asc_order_int=GetUserMenuInput(Prompt=PromptForDateSortOrder,OptionList=SortOrderOptions,type_=int),
+                               max_rows=None)
             print(f'')
             Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                                    master_cp_list=master_cp_list,
+                                    UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                                    NumberPrompt=NumberPrompt,
+                                    DeviceNamePrompt=DeviceNamePrompt)
         case 3:  #Show usage data sorted by amount
-            ShowUsageByIndex(ObjList, 'MB_Used', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), GetUserMenuInput(PromptForUsageSortOrder,SortOrderOptions,type_=int), max_rows=None)
+            SQLShowUsageByName(SourceDir=SourceDir,
+                               cp_name=GetUserObjectInput(Prompt=DeviceNamePrompt),
+                               master_cp_list=master_cp_list,
+                               UsageOutput_type='MB_used', 
+                               asc_order_int=GetUserMenuInput(Prompt=PromptForDateSortOrder, OptionList=SortOrderOptions,type_=int),
+                               max_rows=None)
             print(f'')
             Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                        master_cp_list=master_cp_list,
+                        UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                        NumberPrompt=NumberPrompt,
+                        DeviceNamePrompt=DeviceNamePrompt)
         case 4:  #Show usage data sorted by amount
-            OutputObjectInfoByIndex(ObjList, FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)))
+            SQLOutputObjectInfoByName(SourceDir=SourceDir, cp_name=GetUserObjectInput(Prompt=DeviceNamePrompt), master_cp_list=master_cp_list)
             print(f'')
             Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
-        case 5:  #Show usage above 750MB for a device
-            ShowUsageByIndex(ObjList, 'GreaterThan', FindObjectIndex(ObjList, GetUserObjectInput(DeviceNamePrompt)), asc_order_int = 1, max_rows=None, value=1000)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                        master_cp_list=master_cp_list,
+                        UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                        NumberPrompt=NumberPrompt,
+                        DeviceNamePrompt=DeviceNamePrompt)
+        case 5:  #Show usage above 1000MB for a device
+            SQLShowUsageByName(SourceDir=SourceDir,
+                               cp_name=GetUserObjectInput(Prompt=DeviceNamePrompt),
+                               master_cp_list=master_cp_list,
+                               UsageOutput_type="GreaterThan",
+                               asc_order_int=1,
+                               max_rows=None,
+                               value=1000)
             print(f'')
             Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
-        case 6: #find largest usage by object
-            ObjIndex = FindLargestObject(ObjList)
-            print(f'\nThe Cradlepoint with the highest 24h usage is {color_blue}{ObjList[ObjIndex]}{color_reset}')
-            print(f'The usage was {color_blue}{round(ObjList[ObjIndex].HighUsage, 2):,}MB{color_reset} on {color_blue}{ObjList[ObjIndex].HighUsageDate}{color_reset}\n')
-            #TopTen = FindTop10HighestDays(ObjList)
-            #Print(f'This is the TopTen items {TopTen}')
-            #Pause()
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                                    master_cp_list=master_cp_list,
+                                    UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                                    NumberPrompt=NumberPrompt,
+                                    DeviceNamePrompt=DeviceNamePrompt)
+        case 6: #Show top ten usage by day
+            SQLFindTopXHighestDays(SourceDir=SourceDir, top_x=15)
+            Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                        master_cp_list=master_cp_list,
+                        UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                        NumberPrompt=NumberPrompt,
+                        DeviceNamePrompt=DeviceNamePrompt)
         case 7:  #Show list of all devices
-            ListAllObjects(ObjList)
+            SQLListAllObjects(SourceDir=SourceDir, output=True)
             print(f'')
             Pause()
             LoadUsageMenu()
-            UsageMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt, UsageMenuOptions, type_=int), NumberPrompt, DeviceNamePrompt)
+            UsageMenu_UserInputEval(SourceDir=SourceDir,
+                master_cp_list=master_cp_list,
+                UserInput=GetUserMenuInput(Prompt=NumberPrompt, OptionList=UsageMenuOptions, type_=int),
+                NumberPrompt=NumberPrompt,
+                DeviceNamePrompt=DeviceNamePrompt)
         case 8:  #Exit to main menu
             LoadFrontEndMenu()
-            FrontEndMenu_UserInputEval(ObjList, Saved, GetUserMenuInput(NumberPrompt,FrontEndMenuOptions,type_=int), NumberPrompt, DeviceNamePrompt)
+            FrontEndMenu_UserInputEval(SourceDir=SourceDir,
+                                       master_cp_list=master_cp_list,
+                                       UserInput=GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int),
+                                       NumberPrompt=PromptForMenuNumber,
+                                       DeviceNamePrompt=PromptForDeviceName)
         case _:
-            print(f'UsageMenu_UserInputEval - Not a valid option')
+            print(f'{color_red}UsageMenu_UserInputEval - Not a valid option{color_reset}')
 
 
 #*****************************************************#
 #**              Main Program Area                  **#
 #*****************************************************#
 CPObjectList = [] #create empty object list
-FileSaved = False
 SourceDir = 'C:\\Temp\\CradlepointReportProject\\' #location where the source files exist
 SaveFileDir = SourceDir + 'Save_File\\' #location where the save file exists
-FrontEndMenuOptions = [1,2,3,4,8] #These are the valid selections for the Front end menu
+FrontEndMenuOptions = [1,4,8] #These are the valid selections for the Front end menu
 UsageMenuOptions = [1,2,3,4,5,6,7,8] #These are the valid selections for the Usage menu
 SortOrderOptions = [1,2] #These are the valid selections for ascending or decending order
 StringMenuOpions = ['YES','NO','Y','N'] #These are the valid selections for Yes/No questions
@@ -487,6 +696,10 @@ PromptForLoad = 'CPObjectList is not empty are you sure you want to overwrite it
 PromptForSave = 'Are you sure you want to overwrite the existing save file? (Yes or No) '
 PromptForExit = 'The data has not been saved.  Are you sure you want to continue without saving it? (Yes or No) '
 
+master_cp_list = SQLListAllObjects(SourceDir=SourceDir, output=False)
 LoadFrontEndMenu()
-FrontEndMenu_UserInputEval(CPObjectList, FileSaved, GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int), PromptForMenuNumber, PromptForDeviceName)
-
+FrontEndMenu_UserInputEval(SourceDir=SourceDir,
+                           master_cp_list=master_cp_list,
+                           UserInput=GetUserMenuInput(PromptForMenuNumber, FrontEndMenuOptions, type_=int),
+                           NumberPrompt=PromptForMenuNumber,
+                           DeviceNamePrompt=PromptForDeviceName)
