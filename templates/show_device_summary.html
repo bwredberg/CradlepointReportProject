@@ -28,13 +28,14 @@
         <div class="column left" id="picker">
             <form>
                 <h4>Select a Cradlepoint:</h4>
-                <!-- <label for="CP_Picker">Select a Cradlepoint:</label> -->
                 <select id="CP_Picker" name="CP" class="form-select" aria-label="Default select"> <!-- onchange="showInfo();" -->
                 {% for device in CP_LIST%}
                 <option value="{{device}}">{{device}}</option>
                 {% endfor %}
                 </select>
             </form>
+          <br><br>
+          <button class="btn btn-outline-secondary" type="submit" id="executeButton">Show Summary Report</button>
         </div>
 
         <div class="column right" id="device_info">
@@ -45,33 +46,12 @@
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script type="text/javascript">
-    //function showInfo() {
-    //  var item = document.getElementById("CP_Picker").value;
-    //}
     
-    /*function showInfo() {
-      var item = document.getElementById("CP_Picker").value;
-      
-      axios.get('/device_info', {
-        params: {
-          cp: item
-        }
-      })
-      .then(function (response) {
-        // Replace this with your own code to display the relevant information
-        document.getElementById("device_info").innerHTML = response.data;
-      })
-      .catch(function (error) {
-        console.log(error);
-      });
-    }*/
-    document.addEventListener('DOMContentLoaded', function() {
-        document.getElementById('CP_Picker').addEventListener('change', function() {
-            var item = this.value;
-            
+    function executeReport() {
+      var selectedCP = document.getElementById("CP_Picker").value;      
             axios.get('/device_info', {
                 params: {
-                    cp: item
+                    cp: selectedCP
                 }
             })
             .then(function (response) {
@@ -80,9 +60,10 @@
             .catch(function (error) {
                 console.log(error);
             });
-        });
-    });
-
+        };
+    
+    //add event listener to the Execute button
+    document.getElementById('executeButton').addEventListener('click', executeReport);
     </script>
 
 

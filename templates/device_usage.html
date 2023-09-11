@@ -18,10 +18,10 @@
       <th>Date</th>
       <th>Usage</th>
     </tr>
-    {% for cp in CP_LIST %}
+    {% for cp in CP_DICT %}
     <tr>
-      <td>{{ cp[1] }}</td>   
-      <td>{{ "{:,}".format(cp[0]|round(2)) }}</td>   
+      <td>{{ cp["date"] }}</td>   
+      <td>{{ "{:,}".format(cp["MB_used"]|round(2)) }}</td>   
     </tr>
     {% endfor %}
   </table>
