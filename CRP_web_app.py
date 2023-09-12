@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, url_for, flash, redirect
-import CRP_Stage2
 import CRP_Stage2_SQA
 from werkzeug.exceptions import abort
 
@@ -18,7 +17,7 @@ def list_devices():
 def all_time_stats():
     number_of_days = CRP_Stage2_SQA.SQATotalDays()
     #print(f'number_of_days = {number_of_days}')
-    total_data_used = CRP_Stage2_SQA.WebSQLAllTimeSystemDataUsage()
+    total_data_used = CRP_Stage2_SQA.WebSQAAllTimeSystemDataUsage()
     #print(f'total_data_used = {total_data_used}')
     last_100_total_data_used = CRP_Stage2_SQA.WebSQALastXTotalUsage(day_limit = 100)
     #print(f'Last 100 total data = {last_100_total_data_used}')
@@ -44,7 +43,7 @@ def top_20alltime():
 #This route pulls the device summary info and pushes it back to the table
 @app.route("/device_info")
 def get_device_info():
-    return render_template("device_info.html", CP_DICT=CRP_Stage2_SQA.WebSQLOutputObjectInfoByName(cp_name=request.args["cp"]))
+    return render_template("device_info.html", CP_DICT=CRP_Stage2_SQA.WebSQAOutputObjectInfoByName(cp_name=request.args["cp"]))
 
 #This route loads the device summary page and populates the device drop down list
 @app.route("/show_device_summary")
@@ -73,16 +72,32 @@ def get_device_usage():
                                                 response_limit=request.args["response_limit"])
         return render_template("device_usage.html", CP_DICT=cp_dict)
     '''
-    cp_dict = CRP_Stage2.WebSQLShowUsageByName(cp_name=request.args["cp"], 
-                                                sort_order_value=request.args["sort_order_value"], 
-                                                sort_by_value=request.args["sort_by_value"], 
-                                                response_limit=request.args["response_limit"],
-                                                min_data_usage=request.args["min_data_usage"])
+    cp_dict = CRP_Stage2_SQA.WebSQAShowUsageByName(cp_name=request.args["cp"],
+                                                   sort_order_value=request.args["sort_order_value"], 
+                                                   sort_by_value=request.args["sort_by_value"], 
+                                                   response_limit=request.args["response_limit"],
+                                                   min_data_usage=request.args["min_data_usage"])
     return render_template("device_usage.html", CP_DICT=cp_dict)
 #This route loads the device summary page and populates the device drop down list
 @app.route("/show_device_usage")
 def show_device_usage():
     return render_template("show_device_usage.html", CP_LIST=CRP_Stage2_SQA.SQAListAllObjects(output=False))
+
+
+#This route asks the user for a date and then shows all of the cradlepoint usage for that date
+@app.route("/all_devices_by_day")
+def all_devices_by_day():
+    print("******************all devices by day ********************")
+    return render_template("all_devices_by_day_main.html")
+
+#This route asks the user for a date and then shows all of the cradlepoint usage for that date
+@app.route("/all_devices_by_day_data")
+def all_devices_by_day_data():
+    print(f'Requested date is: {request.args}')
+    cp_dict = CRP_Stage2_SQA.WebSQAAllDeviceUsageForADay(day=request.args["day"],
+                                                         sort_by_value=request.args["sort_by_value"],
+                                                         sort_order_value=request.args["sort_order_value"])
+    return render_template("all_devices_by_day_data.html", CP_DICT=cp_dict)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
