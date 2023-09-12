@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block title %} Cradlepoint Reporting Project {% endblock %}
+
+{% block content %}
+<style>
+  .column {
+    float: left;
+    margin-right: 0;
+  }
+  .left {
+    width: 52%;
+  }
+  .right{
+    width: 48%;
+  }
+  .row::after {
+    content: "";    
+    display: table;
+    clear: both;
+  }
+</style>
+
+<h2>Cradlepoint Usage Report</h2>
+<br>
+<div class="row">
+  <div class="column left" id="picker">
+    <form>
+      <h4>Select a Cradlepoint:</h4>
+      <select id="CP_Picker" name="CP" class="form-select" aria-label="Default select">
+        {% for device in CP_LIST%}
+        <option value="{{device}}">{{device}}</option>
+        {% endfor %}
+      </select>
+    </form>
+    <br>
+    <form>
+      <strong>Sort by:</strong>
+      <label>Date&nbsp;</label><input type="radio" name="sort_by" value="Date" checked> 
+      <label>Usage&nbsp;</label><input type="radio" name="sort_by" value="Usage">
+      &nbsp;
+      <strong>Sort order:</strong>
+      <label>Ascending&nbsp;</label><input type="radio" name="sort_order" value="ASC" checked> 
+      <label>Descending&nbsp;</label><input type="radio" name="sort_order" value="DESC">
+    </form>
+    <br>
+    <!-- Add the "Execute" button -->
+    <button id="executeButton">Execute</button>
+  </div>
+
+  <div class="column right" id="device_usage">
+    <!-- Device info will get stuffed in here after a device selection is made -->
+  </div>
+</div>
+
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script type="text/javascript">
+  var option1, option2;
+
+  function getSelectedOptions() {
+    option1 = document.querySelector('input[name="sort_by"]:checked');
+    option2 = document.querySelector('input[name="sort_order"]:checked');
+  }    
+
+  // Function to execute when the "Execute" button is clicked
+  function executeReport() {
+    var selectedCP = document.getElementById('CP_Picker').value;
+    getSelectedOptions();
+
+    // alert("Selected options:\nsort_by: " + option1.value + "\nsort_order: " + option2.value);
+
+    axios.get('/device_usage', {
+      params: {
+        cp: selectedCP,
+        sort_by_value: option1.value,
+        sort_order_value: option2.value
+      }
+    })
+    .then(function (response) {
+      document.getElementById("device_usage").innerHTML = response.data;
+    })
+    .catch(function (error) {
+      console.log(error);
+    });
+  }
+
+  // Add event listener to the "Execute" button
+  document.getElementById('executeButton').addEventListener('click', executeReport);
+</script>
+   
+{% endblock %}
