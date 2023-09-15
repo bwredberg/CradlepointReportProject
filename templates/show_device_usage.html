@@ -121,7 +121,14 @@
     function getSelectedOptions() {
       option1 = document.querySelector('input[name="sort_by"]:checked');
       option2 = document.querySelector('input[name="sort_order"]:checked');
-      response_limit = document.getElementById("limitInput").value;
+      // if the user clears out the "Limit the number of responses box we need to set a value"
+      if (document.getElementById("limitInput").value === "") {
+        //console.log("response = null", document.getElementById("limitInput").value)
+        response_limit = 9999;
+      } else {
+        //console.log("response != null", document.getElementById("limitInput").value)
+        response_limit = document.getElementById("limitInput").value;
+      }
     }
 
     //add event listener to the Execute button
